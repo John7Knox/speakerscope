@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeakerScope — S25+ Characterization Tool</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #04080f;
+  --surface: #080f1a;
+  --surface2: #0c1525;
+  --cyan: #00d4ff;
+  --cyan-dim: #005a6e;
+  --cyan-glow: rgba(0,212,255,0.15);
+  --green: #00ff9d;
+  --green-dim: #004d2f;
+  --amber: #ffaa00;
+  --amber-dim: #4d3300;
+  --red: #ff3a3a;
+  --red-dim: #4d0f0f;
+  --white: #ddeeff;
+  --mid: #4a6680;
+  --faint: #1a2535;
+  --border: #0e1e30;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-body: 'Barlow', sans-serif;
+  --font-head: 'Barlow Condensed', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none; z-index: 9999;
+}
+
+/* Background grid */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(4,8,15,0.95);
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 1.6rem; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--cyan);
+  text-shadow: 0 0 20px var(--cyan), 0 0 40px rgba(0,212,255,0.3);
+}
+.logo sub {
+  font-size: 0.55rem; letter-spacing: 0.25em;
+  color: var(--mid); display: block; margin-top: -2px;
+  font-weight: 400;
+}
+
+.sys-status {
+  display: flex; align-items: center; gap: 16px;
+  font-family: var(--font-mono); font-size: 0.68rem; color: var(--mid);
+}
+.pip { width: 6px; height: 6px; border-radius: 50%; background: #111; }
+.pip.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.pip.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: blp 1s infinite; }
+.pip.err { background: var(--red); box-shadow: 0 0 6px var(--red); }
+@keyframes blp { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ── LAYOUT ── */
+main { padding: 20px 24px; max-width: 1000px; margin: 0 auto; }
+
+/* ── SECTION HEADERS ── */
+.sec-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.sec-num {
+  font-family: var(--font-mono); font-size: 0.62rem; color: var(--cyan-dim);
+  border: 1px solid var(--cyan-dim); padding: 2px 6px; border-radius: 2px;
+  letter-spacing: 0.1em;
+}
+.sec-title {
+  font-family: var(--font-head); font-size: 1.05rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--white);
+}
+.sec-line { flex: 1; height: 1px; background: var(--border); }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 16px; margin-bottom: 14px;
+  position: relative; overflow: hidden;
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--cyan-dim) 40%, transparent 100%);
+}
+
+/* ── MIC DEVICE SELECTOR ── */
+.mic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media(max-width:560px) { .mic-grid { grid-template-columns: 1fr; } }
+
+.mic-slot {
+  border: 1px solid var(--border); border-radius: 4px; padding: 14px;
+  background: var(--surface2); position: relative;
+}
+.mic-slot.active { border-color: var(--cyan); }
+.mic-slot-label {
+  font-family: var(--font-head); font-size: 0.78rem; font-weight: 600;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+}
+.top-label { color: var(--cyan); }
+.bot-label { color: var(--green); }
+.mic-slot select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--white); font-family: var(--font-mono); font-size: 0.68rem;
+  padding: 6px 8px; border-radius: 2px; outline: none; cursor: pointer;
+}
+.mic-slot select:focus { border-color: var(--cyan); }
+.mic-hint { font-size: 0.65rem; color: var(--mid); margin-top: 6px; font-family: var(--font-mono); }
+
+/* ── NOISE FLOOR ── */
+.noise-row { display: flex; align-items: center; gap: 14px; }
+.noise-bar-wrap { flex: 1; }
+.noise-bar-track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; position: relative; }
+.noise-bar-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+  border-radius: 3px; transition: width 0.1s;
+}
+.noise-label { font-family: var(--font-mono); font-size: 0.68rem; color: var(--mid); min-width: 70px; text-align: right; }
+.noise-verdict { font-family: var(--font-mono); font-size: 0.68rem; margin-top: 5px; }
+
+/* ── SWEEP PROGRESS ── */
+.sweep-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.sweep-label { font-family: var(--font-head); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; min-width: 120px; }
+.top-color { color: var(--cyan); }
+.bot-color { color: var(--green); }
+.sweep-track { flex: 1; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.sweep-fill { height: 100%; width: 0%; border-radius: 2px; transition: width 0.2s; }
+.sweep-fill.top { background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); box-shadow: 0 0 8px var(--cyan); }
+.sweep-fill.bot { background: linear-gradient(90deg, var(--green-dim), var(--green)); box-shadow: 0 0 8px var(--green); }
+.sweep-hz { font-family: var(--font-mono); font-size: 0.65rem; color: var(--mid); min-width: 60px; text-align: right; }
+
+/* ── FREQUENCY RESPONSE CANVAS ── */
+.fr-wrap {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 12px; margin-bottom: 14px;
+}
+.fr-title {
+  font-family: var(--font-head); font-size: 0.82rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--mid); margin-bottom: 8px;
+  display: flex; gap: 16px; align-items: center;
+}
+.fr-legend { display: flex; gap: 14px; font-size: 0.65rem; margin-left: auto; }
+.fr-leg-item { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); }
+.fr-leg-dot { width: 8px; height: 2px; border-radius: 1px; }
+canvas#frCanvas { width: 100%; height: 180px; display: block; }
+
+/* ── BUTTONS ── */
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.btn {
+  font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 9px 18px; border-radius: 2px;
+  border: 1px solid; cursor: pointer; transition: all 0.15s;
+  background: transparent;
+}
+.btn:disabled { opacity: 0.25; cursor: not-allowed; }
+.btn-cyan { border-color: var(--cyan); color: var(--cyan); }
+.btn-cyan:hover:not(:disabled) { background: var(--cyan-glow); box-shadow: 0 0 14px rgba(0,212,255,0.3); }
+.btn-green { border-color: var(--green); color: var(--green); }
+.btn-green:hover:not(:disabled) { background: rgba(0,255,157,0.08); box-shadow: 0 0 14px rgba(0,255,157,0.2); }
+.btn-amber { border-color: var(--amber); color: var(--amber); }
+.btn-amber:hover:not(:disabled) { background: rgba(255,170,0,0.08); }
+.btn-red { border-color: var(--red); color: var(--red); }
+.btn-red:hover:not(:disabled) { background: rgba(255,58,58,0.08); }
+
+/* ── PRESET OUTPUT ── */
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media(max-width:620px) { .preset-grid { grid-template-columns: 1fr; } }
+
+.preset-block {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; overflow: hidden;
+}
+.preset-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.preset-app {
+  font-family: var(--font-head); font-size: 0.82rem; font-weight: 700;
+  letter-spacing: 0.2em; text-transform: uppercase;
+}
+.wavelet-color { color: var(--cyan); }
+.poweramp-color { color: var(--amber); }
+.preset-copy {
+  font-family: var(--font-mono); font-size: 0.62rem; color: var(--mid);
+  background: none; border: 1px solid var(--border); cursor: pointer;
+  padding: 3px 8px; border-radius: 2px; transition: all 0.15s;
+}
+.preset-copy:hover { border-color: var(--cyan); color: var(--cyan); }
+.preset-textarea {
+  width: 100%; background: transparent; border: none; outline: none;
+  color: var(--green); font-family: var(--font-mono); font-size: 0.6rem;
+  padding: 12px 14px; resize: none; line-height: 1.6;
+  min-height: 180px;
+}
+.preset-note {
+  padding: 8px 14px; border-top: 1px solid var(--border);
+  font-size: 0.62rem; color: var(--mid); font-family: var(--font-mono); line-height: 1.6;
+}
+
+/* ── CORRECTION TABLE ── */
+.correction-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; font-family: var(--font-mono); }
+.correction-table th {
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border);
+  color: var(--mid); font-weight: 400; letter-spacing: 0.08em;
+}
+.correction-table td { padding: 5px 10px; border-bottom: 1px solid var(--faint); }
+.correction-table tr:hover td { background: var(--faint); }
+.pos-gain { color: var(--green); }
+.neg-gain { color: var(--red); }
+.zero-gain { color: var(--mid); }
+
+/* ── WARNING BANNER ── */
+.warning {
+  background: rgba(255,170,0,0.07); border: 1px solid var(--amber-dim);
+  border-left: 3px solid var(--amber);
+  padding: 10px 14px; border-radius: 2px; margin-bottom: 14px;
+  font-family: var(--font-mono); font-size: 0.68rem; color: var(--amber); line-height: 1.7;
+}
+.info-box {
+  background: rgba(0,212,255,0.04); border: 1px solid var(--cyan-dim);
+  border-left: 3px solid var(--cyan);
+  padding: 10px 14px; border-radius: 2px; margin-bottom: 14px;
+  font-family: var(--font-mono); font-size: 0.68rem; color: #6699bb; line-height: 1.7;
+}
+
+/* ── PHASE INDICATOR ── */
+.phase-tracker {
+  display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+}
+.phase-step {
+  flex: 1; padding: 8px 4px; text-align: center;
+  font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.06em;
+  color: var(--mid); border-right: 1px solid var(--border); transition: all 0.3s;
+  background: var(--bg);
+}
+.phase-step:last-child { border-right: none; }
+.phase-step.done { background: rgba(0,255,157,0.05); color: var(--green); }
+.phase-step.active { background: var(--cyan-glow); color: var(--cyan); font-weight: bold; }
+
+/* ── LOG ── */
+.log {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px 14px; font-family: var(--font-mono); font-size: 0.65rem;
+  line-height: 1.8; max-height: 120px; overflow-y: auto; margin-bottom: 14px;
+  color: var(--mid);
+}
+.log .ok { color: var(--green); }
+.log .warn { color: var(--amber); }
+.log .err { color: var(--red); }
+.log .info { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SpeakerScope
+    <sub>S25+ DUAL-SPEAKER CHARACTERIZATION · v1.0</sub>
+  </div>
+  <div class="sys-status">
+    <div class="pip" id="micPip"></div><span id="micStatus">MIC UNINIT</span>
+    <div class="pip" id="noisePip"></div><span id="noiseStatus">NOISE: —</span>
+    <div class="pip" id="measPip"></div><span id="measStatus">READY</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Phase tracker -->
+  <div class="phase-tracker">
+    <div class="phase-step active" id="ph0">① SETUP</div>
+    <div class="phase-step" id="ph1">② NOISE</div>
+    <div class="phase-step" id="ph2">③ TOP SPK</div>
+    <div class="phase-step" id="ph3">④ BOT SPK</div>
+    <div class="phase-step" id="ph4">⑤ ANALYZE</div>
+    <div class="phase-step" id="ph5">⑥ EXPORT</div>
+  </div>
+
+  <!-- SETUP -->
+  <div class="sec-header"><span class="sec-num">01</span><span class="sec-title">Microphone Assignment</span><div class="sec-line"></div></div>
+
+  <div class="info-box">
+    ⓘ  Place S25+ face-up on a flat surface. Top mic (earpiece end) captures top tweeter. Bottom mic (USB-C end) captures bottom woofer. Chrome on Android may expose mics as separate <code>MediaDevices</code> or as a single device — select accordingly. If only one mic appears, perform both sweeps with it and flip the phone between measurements.
+  </div>
+
+  <div class="card">
+    <div class="mic-grid">
+      <div class="mic-slot" id="topMicSlot">
+        <div class="mic-slot-label top-label">▲ TOP SPEAKER / TWEETER</div>
+        <select id="topMicSel"><option value="">— select mic device —</option></select>
+        <div class="mic-hint" id="topMicHint">Mic near earpiece / top edge</div>
+      </div>
+      <div class="mic-slot" id="botMicSlot">
+        <div class="mic-slot-label bot-label">▼ BOTTOM SPEAKER / WOOFER</div>
+        <select id="botMicSel"><option value="">— select mic device —</option></select>
+        <div class="mic-hint" id="botMicHint">Mic near USB-C / bottom edge</div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:12px;margin-bottom:0;">
+      <button class="btn btn-cyan" id="enumBtn">🔍 ENUMERATE MICROPHONES</button>
+    </div>
+  </div>
+
+  <!-- NOISE CHECK -->
+  <div class="sec-header"><span class="sec-num">02</span><span class="sec-title">Ambient Noise Floor Check</span><div class="sec-line"></div></div>
+
+  <div class="card">
+    <div class="noise-row">
+      <div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--mid);min-width:90px;">NOISE LEVEL</div>
+      <div class="noise-bar-wrap">
+        <div class="noise-bar-track"><div class="noise-bar-fill" id="noiseFill"></div></div>
+        <div class="noise-verdict" id="noiseVerdict" style="color:var(--mid);">Press CHECK to measure ambient noise for 3 seconds.</div>
+      </div>
+      <div class="noise-label" id="noiseDb">— dBFS</div>
+    </div>
+    <div class="btn-row" style="margin-top:12px;margin-bottom:0;">
+      <button class="btn btn-amber" id="noiseBtn" disabled>⬛ CHECK NOISE FLOOR</button>
+    </div>
+  </div>
+
+  <!-- SWEEP CONTROL -->
+  <div class="sec-header"><span class="sec-num">03</span><span class="sec-title">Sine Sweep Measurement</span><div class="sec-line"></div></div>
+
+  <div class="warning">
+    ⚠  SPEAKER SAFETY: The sweep runs 20Hz–20kHz. Frequencies below 80Hz will produce low displacement at phone speaker volumes. Keep device volume at 70–80% max — never 100%. The app applies a 20Hz high-pass guard and a gentle fade-in/fade-out to each sweep. If you hear distress sounds from the speaker, reduce volume immediately.
+  </div>
+
+  <div class="card">
+    <div class="sweep-row">
+      <div class="sweep-label top-color">▲ TOP SPEAKER</div>
+      <div class="sweep-track"><div class="sweep-fill top" id="topSweepFill"></div></div>
+      <div class="sweep-hz" id="topSweepHz">—</div>
+    </div>
+    <div class="sweep-row">
+      <div class="sweep-label bot-color">▼ BOT SPEAKER</div>
+      <div class="sweep-track"><div class="sweep-fill bot" id="botSweepFill"></div></div>
+      <div class="sweep-hz" id="botSweepHz">—</div>
+    </div>
+    <div class="btn-row" style="margin-bottom:0;">
+      <button class="btn btn-cyan" id="sweepTopBtn" disabled>▶ SWEEP TOP SPEAKER</button>
+      <button class="btn btn-green" id="sweepBotBtn" disabled>▶ SWEEP BOT SPEAKER</button>
+      <button class="btn btn-red" id="resetBtn">↺ RESET ALL</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log" id="logBox"><span class="info">[ SPEAKERSCOPE READY ] — enumerate mics to begin</span></div>
+
+  <!-- FREQUENCY RESPONSE PLOT -->
+  <div class="sec-header"><span class="sec-num">04</span><span class="sec-title">Frequency Response</span><div class="sec-line"></div></div>
+
+  <div class="fr-wrap">
+    <div class="fr-title">
+      MEASURED FR — RAW (smoothed 1/6 octave)
+      <div class="fr-legend">
+        <div class="fr-leg-item"><div class="fr-leg-dot" style="background:var(--cyan);"></div>TOP</div>
+        <div class="fr-leg-item"><div class="fr-leg-dot" style="background:var(--green);"></div>BOTTOM</div>
+        <div class="fr-leg-item"><div class="fr-leg-dot" style="background:rgba(255,255,255,0.2);"></div>TARGET (FLAT)</div>
+      </div>
+    </div>
+    <canvas id="frCanvas" height="180"></canvas>
+  </div>
+
+  <!-- ANALYSIS & CORRECTION -->
+  <div class="sec-header"><span class="sec-num">05</span><span class="sec-title">Correction Filters</span><div class="sec-line"></div></div>
+
+  <div class="card" id="correctionCard">
+    <div style="color:var(--mid);font-family:var(--font-mono);font-size:0.7rem;text-align:center;padding:20px;">
+      Complete both sweeps to generate correction filters.
+    </div>
+  </div>
+
+  <!-- PRESET EXPORT -->
+  <div class="sec-header"><span class="sec-num">06</span><span class="sec-title">EQ Preset Export</span><div class="sec-line"></div></div>
+
+  <div class="preset-grid" id="presetGrid">
+    <div class="preset-block">
+      <div class="preset-header">
+        <span class="preset-app wavelet-color">WAVELET</span>
+        <button class="preset-copy" onclick="copyPreset('waveletOut')">COPY</button>
+      </div>
+      <textarea class="preset-textarea" id="waveletOut" readonly>// Complete sweeps to generate preset</textarea>
+      <div class="preset-note" id="waveletNote">127-band GraphicEQ string · import via Wavelet → AutoEQ → Import</div>
+    </div>
+    <div class="preset-block">
+      <div class="preset-header">
+        <span class="preset-app poweramp-color">POWERAMP</span>
+        <button class="preset-copy" onclick="copyPreset('powerampOut')">COPY</button>
+      </div>
+      <textarea class="preset-textarea" id="powerampOut" readonly>// Complete sweeps to generate preset</textarea>
+      <div class="preset-note" id="powerampNote">10-band Parametric EQ · enter manually in Poweramp EQ → Parametric mode</div>
+    </div>
+  </div>
+
+  <div style="height:30px;"></div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════════
+const state = {
+  topMicId: null,
+  botMicId: null,
+  noiseFloorDb: null,
+  topFR: null,   // Float32Array of dB values at log-spaced freqs
+  botFR: null,
+  sweeping: false,
+  sampleRate: 48000,
+};
+
+// Log-spaced freq axis: 127 points from 20Hz to 20kHz (matches AutoEQ GraphicEQ)
+const WAVELET_FREQS = generateLogFreqs(20, 20000, 127);
+const FFT_SIZE = 32768;
+
+function generateLogFreqs(fmin, fmax, n) {
+  const f = [];
+  for (let i = 0; i < n; i++) {
+    f.push(Math.round(fmin * Math.pow(fmax / fmin, i / (n - 1))));
+  }
+  return f;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGGING
+// ═══════════════════════════════════════════════════════════════════════════════
+function log(msg, cls = '') {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setPhase(n) {
+  for (let i = 0; i <= 5; i++) {
+    const el = document.getElementById(`ph${i}`);
+    if (i < n) el.className = 'phase-step done';
+    else if (i === n) el.className = 'phase-step active';
+    else el.className = 'phase-step';
+  }
+}
+
+function setPip(id, cls, text, textId) {
+  document.getElementById(id).className = 'pip ' + cls;
+  if (textId) document.getElementById(textId).textContent = text;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MIC ENUMERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('enumBtn').addEventListener('click', async () => {
+  try {
+    // Request mic permission first
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop()); // just for permission
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+
+    log(`Found ${mics.length} audio input device(s)`, 'info');
+
+    ['topMicSel', 'botMicSel'].forEach(selId => {
+      const sel = document.getElementById(selId);
+      sel.innerHTML = '<option value="">— select —</option>';
+      mics.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = m.deviceId;
+        opt.textContent = m.label || `Microphone ${i + 1} (${m.deviceId.slice(0,8)}...)`;
+        sel.appendChild(opt);
+      });
+      // Auto-select default
+      if (mics.length === 1) sel.value = mics[0].deviceId;
+    });
+
+    if (mics.length >= 2) {
+      document.getElementById('topMicSel').value = mics[0].deviceId;
+      document.getElementById('botMicSel').value = mics[1].deviceId;
+      log(`Auto-assigned: TOP → "${mics[0].label || 'Mic 0'}", BOT → "${mics[1].label || 'Mic 1'}"`, 'ok');
+    } else if (mics.length === 1) {
+      log('Only 1 mic found. Assign it to both slots — sweep top speaker first, then flip phone for bottom.', 'warn');
+    } else {
+      log('No microphones found. Check permissions.', 'err');
+    }
+
+    setPip('micPip', 'ok', 'MIC OK', 'micStatus');
+    document.getElementById('noiseBtn').disabled = false;
+    setPhase(1);
+  } catch (e) {
+    log(`Mic enumeration failed: ${e.message}`, 'err');
+    setPip('micPip', 'err', 'MIC ERR', 'micStatus');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOISE FLOOR CHECK
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('noiseBtn').addEventListener('click', async () => {
+  const micId = document.getElementById('topMicSel').value || document.getElementById('botMicSel').value;
+  if (!micId) { log('Select a mic device first.', 'warn'); return; }
+
+  log('Measuring noise floor for 3 seconds — keep quiet...', 'info');
+  setPip('noisePip', 'warn', 'MEASURING...', 'noiseStatus');
+  document.getElementById('noiseBtn').disabled = true;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { deviceId: { exact: micId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+
+    const ac = new AudioContext({ sampleRate: 48000 });
+    state.sampleRate = ac.sampleRate;
+    const src = ac.createMediaStreamSource(stream);
+    const analyser = ac.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+
+    const data = new Float32Array(analyser.frequencyBinCount);
+    let maxRms = 0;
+    const interval = setInterval(() => {
+      analyser.getFloatFrequencyData(data);
+      // RMS of frequency data as noise proxy
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += Math.pow(10, data[i] / 20);
+      const rms = Math.sqrt(sum / data.length);
+      const dbVal = 20 * Math.log10(rms + 1e-10);
+      maxRms = Math.max(maxRms, rms);
+      const fill = Math.min(100, Math.max(0, (dbVal + 90) / 70 * 100));
+      document.getElementById('noiseFill').style.width = fill + '%';
+      document.getElementById('noiseDb').textContent = dbVal.toFixed(1) + ' dBFS';
+    }, 100);
+
+    await sleep(3000);
+    clearInterval(interval);
+    stream.getTracks().forEach(t => t.stop());
+    await ac.close();
+
+    const noiseDb = 20 * Math.log10(maxRms + 1e-10);
+    state.noiseFloorDb = noiseDb;
+
+    let verdict, cls, pipCls;
+    if (noiseDb < -55) {
+      verdict = '✓ QUIET — ideal measurement environment (<-55 dBFS)'; cls = 'ok'; pipCls = 'ok';
+    } else if (noiseDb < -45) {
+      verdict = '⚠ MODERATE NOISE (-55 to -45 dBFS) — results usable, avoid loud environments'; cls = 'warn'; pipCls = 'warn';
+    } else {
+      verdict = '✗ TOO NOISY (>-45 dBFS) — find quieter environment or expect inaccurate results'; cls = 'err'; pipCls = 'err';
+    }
+
+    document.getElementById('noiseVerdict').textContent = verdict;
+    document.getElementById('noiseVerdict').style.color = `var(--${cls})`;
+    setPip('noisePip', pipCls, `NOISE: ${noiseDb.toFixed(1)}dB`, 'noiseStatus');
+    log(`Noise floor: ${noiseDb.toFixed(1)} dBFS — ${verdict}`, cls);
+
+    document.getElementById('sweepTopBtn').disabled = false;
+    document.getElementById('sweepBotBtn').disabled = false;
+    document.getElementById('noiseBtn').disabled = false;
+    setPhase(2);
+  } catch (e) {
+    log(`Noise check failed: ${e.message}`, 'err');
+    document.getElementById('noiseBtn').disabled = false;
+    setPip('noisePip', 'err', 'NOISE ERR', 'noiseStatus');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SINE SWEEP ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+async function runSweep(micId, fillId, hzId, label, color) {
+  if (state.sweeping) { log('Sweep already running.', 'warn'); return null; }
+  state.sweeping = true;
+  document.getElementById('sweepTopBtn').disabled = true;
+  document.getElementById('sweepBotBtn').disabled = true;
+  setPip('measPip', 'warn', 'SWEEPING...', 'measStatus');
+
+  const SWEEP_DURATION = 10; // seconds
+  const F_START = 20;
+  const F_END = 20000;
+  const SR = 48000;
+  const N = SR * SWEEP_DURATION;
+
+  try {
+    // Get mic stream
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: micId ? { exact: micId } : undefined,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: SR,
+      }
+    });
+
+    const ac = new AudioContext({ sampleRate: SR });
+    state.sampleRate = ac.sampleRate;
+
+    // Build offline context for sweep generation
+    const offCtx = new OfflineAudioContext(1, N, SR);
+
+    // Log sine sweep (exponential chirp): φ(t) = 2π * f0*T/ln(f1/f0) * (exp(t/T * ln(f1/f0)) - 1)
+    const sweepBuf = offCtx.createBuffer(1, N, SR);
+    const sweepData = sweepBuf.getChannelData(0);
+    const k = Math.log(F_END / F_START);
+    const fadeLen = Math.round(SR * 0.05); // 50ms fade
+    for (let i = 0; i < N; i++) {
+      const t = i / SR;
+      const phase = 2 * Math.PI * F_START * SWEEP_DURATION / k * (Math.exp(t * k / SWEEP_DURATION) - 1);
+      let amp = 0.7;
+      if (i < fadeLen) amp *= i / fadeLen;
+      if (i > N - fadeLen) amp *= (N - i) / fadeLen;
+      sweepData[i] = Math.sin(phase) * amp;
+    }
+
+    // Simultaneously: play sweep + record mic
+    const micSrc = ac.createMediaStreamSource(stream);
+    const recorder_analyser = ac.createAnalyser();
+    recorder_analyser.fftSize = FFT_SIZE;
+    micSrc.connect(recorder_analyser);
+
+    // Play sweep via AudioContext
+    const playBuf = ac.createBuffer(1, N, SR);
+    playBuf.getChannelData(0).set(sweepData);
+    const playNode = ac.createBufferSource();
+    playNode.buffer = playBuf;
+    playNode.connect(ac.destination);
+
+    // Record into ScriptProcessorNode (compatible approach)
+    const bufferSize = 4096;
+    const proc = ac.createScriptProcessor(bufferSize, 1, 1);
+    const recordedChunks = [];
+    proc.onaudioprocess = (e) => {
+      const chunk = new Float32Array(e.inputBuffer.getChannelData(0));
+      recordedChunks.push(chunk);
+    };
+    micSrc.connect(proc);
+    proc.connect(ac.createGain()); // silent output
+
+    log(`▶ Sweeping ${label} speaker: 20Hz → 20kHz over 10s`, 'info');
+    playNode.start();
+
+    // Progress update
+    const startT = ac.currentTime;
+    const progInterval = setInterval(() => {
+      const elapsed = ac.currentTime - startT;
+      const frac = Math.min(elapsed / SWEEP_DURATION, 1);
+      document.getElementById(fillId).style.width = (frac * 100) + '%';
+      const curHz = F_START * Math.pow(F_END / F_START, frac);
+      document.getElementById(hzId).textContent = curHz > 999 ? (curHz / 1000).toFixed(1) + 'kHz' : Math.round(curHz) + 'Hz';
+    }, 100);
+
+    await sleep(SWEEP_DURATION * 1000 + 300);
+    clearInterval(progInterval);
+    proc.disconnect();
+    stream.getTracks().forEach(t => t.stop());
+    document.getElementById(fillId).style.width = '100%';
+
+    // Assemble recorded buffer
+    const totalLen = recordedChunks.reduce((a, c) => a + c.length, 0);
+    const recorded = new Float32Array(totalLen);
+    let offset = 0;
+    for (const chunk of recordedChunks) { recorded.set(chunk, offset); offset += chunk.length; }
+
+    log(`Recording complete: ${totalLen} samples @ ${SR}Hz`, 'ok');
+
+    // FREQUENCY RESPONSE ANALYSIS
+    // Deconvolve: divide mic spectrum by sweep spectrum using FFT
+    const fr = analyzeFrequencyResponse(sweepData, recorded, SR);
+
+    await ac.close();
+    state.sweeping = false;
+    document.getElementById('sweepTopBtn').disabled = false;
+    document.getElementById('sweepBotBtn').disabled = false;
+    setPip('measPip', 'ok', 'MEASURED', 'measStatus');
+    return fr;
+
+  } catch (e) {
+    log(`Sweep failed: ${e.message}`, 'err');
+    state.sweeping = false;
+    document.getElementById('sweepTopBtn').disabled = false;
+    document.getElementById('sweepBotBtn').disabled = false;
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FREQUENCY RESPONSE EXTRACTION
+// Via cross-correlation / spectral division of recorded vs reference sweep
+// ═══════════════════════════════════════════════════════════════════════════════
+function analyzeFrequencyResponse(ref, rec, sr) {
+  // Use overlapping FFT windows across the sweep, extract magnitude response
+  const winSize = 8192;
+  const hop = 2048;
+  const nBins = winSize / 2;
+  const freqRes = sr / winSize;
+
+  // Accumulate magnitude spectra
+  const magAcc = new Float64Array(nBins);
+  const refAcc = new Float64Array(nBins);
+  let windowCount = 0;
+
+  for (let start = 0; start + winSize < Math.min(ref.length, rec.length); start += hop) {
+    const recWin = applyHann(rec.slice(start, start + winSize));
+    const refWin = applyHann(ref.slice(start, start + winSize));
+    const recMag = fftMagnitude(recWin);
+    const refMag = fftMagnitude(refWin);
+    for (let i = 1; i < nBins; i++) {
+      magAcc[i] += recMag[i];
+      refAcc[i] += refMag[i] + 1e-12;
+    }
+    windowCount++;
+  }
+
+  // Compute response as rec/ref ratio in dB, sampled at WAVELET_FREQS
+  const frDb = new Float32Array(WAVELET_FREQS.length);
+  for (let fi = 0; fi < WAVELET_FREQS.length; fi++) {
+    const freq = WAVELET_FREQS[fi];
+    const bin = Math.round(freq / freqRes);
+    const binClamped = Math.min(Math.max(bin, 1), nBins - 1);
+    // Interpolate from neighbors
+    const ratio = (magAcc[binClamped] / windowCount) / (refAcc[binClamped] / windowCount);
+    frDb[fi] = 20 * Math.log10(ratio + 1e-10);
+  }
+
+  // Smooth with 1/6 octave smoothing
+  return smoothOctave(frDb, WAVELET_FREQS, 1/6);
+}
+
+function applyHann(buf) {
+  const out = new Float32Array(buf.length);
+  for (let i = 0; i < buf.length; i++) {
+    out[i] = buf[i] * 0.5 * (1 - Math.cos(2 * Math.PI * i / (buf.length - 1)));
+  }
+  return out;
+}
+
+// DFT-based magnitude (real FFT approximation using Cooley-Tukey)
+function fftMagnitude(x) {
+  const n = x.length;
+  const re = new Float64Array(n);
+  const im = new Float64Array(n);
+  for (let i = 0; i < n; i++) re[i] = x[i];
+
+  // Cooley-Tukey iterative FFT
+  let j = 0;
+  for (let i = 1; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const ur = re[i+k], ui = im[i+k];
+        const vr = re[i+k+len/2]*cr - im[i+k+len/2]*ci;
+        const vi = re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+        re[i+k] = ur+vr; im[i+k] = ui+vi;
+        re[i+k+len/2] = ur-vr; im[i+k+len/2] = ui-vi;
+        const nr = cr*wr - ci*wi;
+        ci = cr*wi + ci*wr; cr = nr;
+      }
+    }
+  }
+
+  const mag = new Float32Array(n / 2);
+  for (let i = 0; i < n / 2; i++) mag[i] = Math.sqrt(re[i]*re[i] + im[i]*im[i]);
+  return mag;
+}
+
+function smoothOctave(frDb, freqs, octave) {
+  const out = new Float32Array(frDb.length);
+  for (let i = 0; i < freqs.length; i++) {
+    const f = freqs[i];
+    const flo = f * Math.pow(2, -octave / 2);
+    const fhi = f * Math.pow(2, octave / 2);
+    let sum = 0, count = 0;
+    for (let j = 0; j < freqs.length; j++) {
+      if (freqs[j] >= flo && freqs[j] <= fhi) { sum += frDb[j]; count++; }
+    }
+    out[i] = count > 0 ? sum / count : frDb[i];
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SWEEP BUTTON HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('sweepTopBtn').addEventListener('click', async () => {
+  const micId = document.getElementById('topMicSel').value;
+  setPhase(2);
+  const fr = await runSweep(micId, 'topSweepFill', 'topSweepHz', 'TOP', '#00d4ff');
+  if (fr) {
+    state.topFR = fr;
+    log('Top speaker FR captured ✓', 'ok');
+    drawFR();
+    if (state.topFR && state.botFR) generatePresets();
+    else setPhase(3);
+  }
+});
+
+document.getElementById('sweepBotBtn').addEventListener('click', async () => {
+  const micId = document.getElementById('botMicSel').value;
+  setPhase(3);
+  const fr = await runSweep(micId, 'botSweepFill', 'botSweepHz', 'BOTTOM', '#00ff9d');
+  if (fr) {
+    state.botFR = fr;
+    log('Bottom speaker FR captured ✓', 'ok');
+    drawFR();
+    if (state.topFR && state.botFR) generatePresets();
+    else setPhase(4);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FREQUENCY RESPONSE PLOT
+// ═══════════════════════════════════════════════════════════════════════════════
+function drawFR() {
+  const canvas = document.getElementById('frCanvas');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio || 800;
+  canvas.height = 180 * (window.devicePixelRatio || 1);
+  const c = canvas.getContext('2d');
+  const scale = window.devicePixelRatio || 1;
+  c.scale(scale, scale);
+  const W = canvas.offsetWidth || 800, H = 180;
+
+  c.fillStyle = '#050c15'; c.fillRect(0, 0, W, H);
+
+  // Grid
+  const dbRange = 40, dbMin = -20, dbMax = 20;
+  c.strokeStyle = 'rgba(14,30,48,1)'; c.lineWidth = 1;
+  for (let db = dbMin; db <= dbMax; db += 5) {
+    const y = H * (1 - (db - dbMin) / dbRange);
+    c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+    if (db !== 0) {
+      c.fillStyle = '#1a2535'; c.font = `${10}px Share Tech Mono`;
+      c.fillText(db + 'dB', 3, y - 3);
+    }
+  }
+  // 0dB line
+  const y0 = H * (1 - (0 - dbMin) / dbRange);
+  c.strokeStyle = 'rgba(255,255,255,0.08)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(0, y0); c.lineTo(W, y0); c.stroke();
+
+  // Freq grid
+  const logFreqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  logFreqs.forEach(f => {
+    const x = freqToX(f, W);
+    c.strokeStyle = 'rgba(14,30,48,1)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
+    const lbl = f >= 1000 ? (f/1000)+'k' : f+'';
+    c.fillStyle = '#1a2535'; c.font = `10px Share Tech Mono`;
+    c.fillText(lbl, x + 2, H - 4);
+  });
+
+  function plotFR(fr, color) {
+    if (!fr) return;
+    c.strokeStyle = color; c.lineWidth = 2;
+    c.shadowColor = color; c.shadowBlur = 4;
+    c.beginPath();
+    for (let i = 0; i < WAVELET_FREQS.length; i++) {
+      const x = freqToX(WAVELET_FREQS[i], W);
+      const db = Math.max(dbMin, Math.min(dbMax, fr[i]));
+      const y = H * (1 - (db - dbMin) / dbRange);
+      i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    }
+    c.stroke();
+    c.shadowBlur = 0;
+  }
+
+  plotFR(state.topFR, '#00d4ff');
+  plotFR(state.botFR, '#00ff9d');
+}
+
+function freqToX(f, W) {
+  return W * (Math.log10(f) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORRECTION + PRESET GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+function generatePresets() {
+  setPhase(4);
+  log('Generating correction filters...', 'info');
+
+  // Use average of top+bot as the measured response (combined speaker system)
+  // Each speaker gets its own correction but we output one combined preset
+  const combined = new Float32Array(WAVELET_FREQS.length);
+  for (let i = 0; i < WAVELET_FREQS.length; i++) {
+    combined[i] = (state.topFR[i] + state.botFR[i]) / 2;
+  }
+
+  // Correction = invert the measured response (target = flat = 0dB)
+  // Apply limits: max boost +12dB, max cut -12dB (prevent over-correction)
+  const correction = new Float32Array(WAVELET_FREQS.length);
+  for (let i = 0; i < WAVELET_FREQS.length; i++) {
+    correction[i] = Math.max(-12, Math.min(12, -combined[i]));
+  }
+
+  // Normalise: find peak gain, subtract it to avoid clipping
+  const peakGain = Math.max(...correction);
+  const preamp = -peakGain - 1.5; // leave 1.5dB headroom
+  const corrNorm = correction.map(v => v + preamp);
+
+  // ── WAVELET: 127-band GraphicEQ string ─────────────────────────────────────
+  const waveletStr = 'GraphicEQ: ' +
+    WAVELET_FREQS.map((f, i) => `${f} ${corrNorm[i].toFixed(1)}`).join('; ');
+
+  // ── POWERAMP: 10-band Parametric EQ ────────────────────────────────────────
+  // Fit correction curve to 10 peaking filters + optional shelf filters
+  // Select 8 peaking bands at musically relevant frequencies + low/high shelf
+  const peqBands = fitParametricEQ(corrNorm, WAVELET_FREQS, 10);
+  const powerampStr = buildPowerampPreset(peqBands, preamp);
+
+  // ── CORRECTION TABLE ────────────────────────────────────────────────────────
+  buildCorrectionTable(state.topFR, state.botFR, corrNorm);
+
+  // ── OUTPUT ──────────────────────────────────────────────────────────────────
+  document.getElementById('waveletOut').value = waveletStr;
+  document.getElementById('powerampOut').value = powerampStr;
+
+  document.getElementById('waveletNote').textContent =
+    `127-band GraphicEQ · Preamp: ${preamp.toFixed(1)}dB · Import: Wavelet → AutoEQ → Import (save as .txt)`;
+  document.getElementById('powerampNote').textContent =
+    `10-band Parametric EQ · Preamp: ${preamp.toFixed(1)}dB · Enter manually in Poweramp → EQ → Parametric mode`;
+
+  // Add S25+ AIDL note
+  const warning = document.createElement('div');
+  warning.className = 'warning';
+  warning.style.marginTop = '10px';
+  warning.innerHTML = `⚠ S25+ / Android 15 note: Poweramp Equalizer build 990+ reports "moderately reduced frequency resolution (AIDL Mode 1)" on Samsung S25 series. High-frequency corrections above 10kHz may be less effective than expected. The Wavelet GraphicEQ preset is not affected.`;
+  document.getElementById('presetGrid').after(warning);
+
+  setPhase(5);
+  log('Presets generated. Copy from export boxes below.', 'ok');
+  log(`Preamp: ${preamp.toFixed(1)} dBFS | Wavelet: 127 bands | Poweramp: 10 bands`, 'ok');
+}
+
+// ── Parametric EQ curve fitting ───────────────────────────────────────────────
+// Simple approach: sample correction curve at 10 key frequencies, compute gain + Q
+function fitParametricEQ(corrDb, freqs, nBands) {
+  // Key frequencies covering the full range musically
+  const targetFreqs = [40, 100, 250, 500, 1000, 2000, 4000, 7000, 12000, 18000];
+  const bands = [];
+
+  for (let b = 0; b < nBands; b++) {
+    const tf = targetFreqs[b];
+    // Interpolate gain from correction curve
+    const gain = interpolateAtFreq(corrDb, freqs, tf);
+
+    // Determine filter type
+    let type;
+    if (b === 0) type = 'LowShelf';
+    else if (b === nBands - 1) type = 'HighShelf';
+    else type = 'Peaking';
+
+    // Q: wider at extremes, narrower in mids
+    const q = b === 0 || b === nBands - 1 ? 0.7 : 1.4;
+
+    bands.push({ freq: tf, gain: parseFloat(gain.toFixed(1)), q, type });
+  }
+  return bands;
+}
+
+function interpolateAtFreq(corrDb, freqs, targetHz) {
+  // Find surrounding freq bins and linear interpolate
+  for (let i = 0; i < freqs.length - 1; i++) {
+    if (freqs[i] <= targetHz && freqs[i+1] >= targetHz) {
+      const t = (targetHz - freqs[i]) / (freqs[i+1] - freqs[i]);
+      return corrDb[i] * (1 - t) + corrDb[i+1] * t;
+    }
+  }
+  return corrDb[corrDb.length - 1];
+}
+
+function buildPowerampPreset(bands, preamp) {
+  let str = `; SpeakerScope Parametric EQ — Samsung S25+ Speaker Correction\n`;
+  str += `; Generated: ${new Date().toLocaleString()}\n`;
+  str += `; Preamp: ${preamp.toFixed(1)} dB\n`;
+  str += `;\n`;
+  str += `; Band | Type       | Freq (Hz) | Gain (dB) | Q\n`;
+  str += `; -----+------------+-----------+-----------+-----\n`;
+  bands.forEach((b, i) => {
+    str += `; ${String(i+1).padStart(4)} | ${b.type.padEnd(10)} | ${String(b.freq).padStart(9)} | ${b.gain >= 0 ? '+' : ''}${String(b.gain).padStart(9)} | ${b.q}\n`;
+  });
+  str += `;\n`;
+  str += `; HOW TO ENTER IN POWERAMP:\n`;
+  str += `; 1. Open Poweramp → EQ → select Parametric mode\n`;
+  str += `; 2. Set Preamp to ${preamp.toFixed(1)} dB\n`;
+  str += `; 3. Set number of bands to 10\n`;
+  str += `; 4. Enter each band's Freq, Gain and Q as listed above\n`;
+  str += `; 5. Save preset as "S25_Speaker_Correction"\n`;
+  return str;
+}
+
+function buildCorrectionTable(topFR, botFR, corrNorm) {
+  const keyFreqs = [40, 80, 125, 250, 500, 1000, 2000, 4000, 8000, 12000, 16000, 20000];
+  let html = `<table class="correction-table">
+    <thead><tr>
+      <th>FREQ</th>
+      <th>TOP SPK (dB)</th>
+      <th>BOT SPK (dB)</th>
+      <th>CORRECTION (dB)</th>
+      <th>INTERPRETATION</th>
+    </tr></thead><tbody>`;
+
+  keyFreqs.forEach(f => {
+    const topDb = interpolateAtFreq(topFR, WAVELET_FREQS, f).toFixed(1);
+    const botDb = interpolateAtFreq(botFR, WAVELET_FREQS, f).toFixed(1);
+    const corr = interpolateAtFreq(corrNorm, WAVELET_FREQS, f).toFixed(1);
+    const corrN = parseFloat(corr);
+    let cls = corrN > 1 ? 'pos-gain' : corrN < -1 ? 'neg-gain' : 'zero-gain';
+    let interp = '';
+    if (f < 200) interp = corrN > 2 ? 'Bass boost (thin speaker)' : corrN < -2 ? 'Bass cut (boxy)' : 'Bass OK';
+    else if (f < 1000) interp = corrN > 2 ? 'Low-mid boost' : corrN < -2 ? 'Low-mid cut' : 'Midrange OK';
+    else if (f < 5000) interp = corrN > 2 ? 'Mid boost' : corrN < -2 ? 'Presence cut (harsh)' : 'Presence OK';
+    else interp = corrN > 2 ? 'Treble boost' : corrN < -2 ? 'Treble cut (bright/harsh)' : 'Treble OK';
+    html += `<tr>
+      <td>${f >= 1000 ? (f/1000)+'kHz' : f+'Hz'}</td>
+      <td>${topDb}</td><td>${botDb}</td>
+      <td class="${cls}">${corrN >= 0 ? '+' : ''}${corr}</td>
+      <td>${interp}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('correctionCard').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════════════════════════════════════════
+document.getElementById('resetBtn').addEventListener('click', () => {
+  state.topFR = null; state.botFR = null; state.noiseFloorDb = null;
+  ['topSweepFill','botSweepFill'].forEach(id => document.getElementById(id).style.width = '0%');
+  ['topSweepHz','botSweepHz'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('noiseFill').style.width = '0%';
+  document.getElementById('noiseDb').textContent = '— dBFS';
+  document.getElementById('noiseVerdict').textContent = 'Press CHECK to measure ambient noise.';
+  document.getElementById('waveletOut').value = '// Complete sweeps to generate preset';
+  document.getElementById('powerampOut').value = '// Complete sweeps to generate preset';
+  document.getElementById('correctionCard').innerHTML = '<div style="color:var(--mid);font-family:var(--font-mono);font-size:0.7rem;text-align:center;padding:20px;">Complete both sweeps to generate correction filters.</div>';
+  document.getElementById('logBox').innerHTML = '<span class="info">[ RESET ] — ready for new measurement session</span>';
+  setPhase(0);
+  setPip('measPip', '', 'READY', 'measStatus');
+  document.getElementById('sweepTopBtn').disabled = true;
+  document.getElementById('sweepBotBtn').disabled = true;
+  drawFR();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COPY PRESET
+// ═══════════════════════════════════════════════════════════════════════════════
+function copyPreset(id) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.value).then(() => {
+    log(`Preset copied to clipboard (${id === 'waveletOut' ? 'Wavelet' : 'Poweramp'})`, 'ok');
+  }).catch(() => {
+    el.select();
+    document.execCommand('copy');
+    log('Copied via fallback', 'ok');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════════════════
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Init canvas
+window.addEventListener('load', () => { drawFR(); setPhase(0); });
+window.addEventListener('resize', () => { drawFR(); });
+</script>
+</body>
+</html>
